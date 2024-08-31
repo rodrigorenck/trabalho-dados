@@ -35,46 +35,60 @@ def get_neighbour_names(soup, base_url):
         return ', '.join(neighbour_names)
     return ''
 
-# URL base
-base_url = 'http://127.0.0.1:8000/places/default/index'
+def process_page(url, base_url, data):
+    html = get_html_content(url)
+    if html:
+        bs = BeautifulSoup(html, 'html.parser')
 
-# Regex para encontrar links que contêm "view"
-view_pattern = re.compile(r'view', re.IGNORECASE)
+        # Para cada link de país na página
+        for link in bs.find_all('a', href=re.compile(r'view', re.IGNORECASE)):
+            href = link['href']
+            full_url = urljoin(base_url, href)
+            
+            print(f"\nProcessando país: {link.text.strip()}")
+            
+            # Obtém o conteúdo HTML da página do país
+            country_html = get_html_content(full_url)
+            if country_html:
+                country_bs = BeautifulSoup(country_html, 'html.parser')
+                
+                # Extrai as informações
+                country = extract_info(country_bs, 'places_country__row')
+                currency_name = extract_info(country_bs, 'places_currency_name__row')
+                continent = extract_info(country_bs, 'places_continent__row')
+                neighbours = get_neighbour_names(country_bs, base_url)
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Adiciona os dados à lista
+                data.append([country, currency_name, continent, neighbours, timestamp])
+                
+                print(f"Dados extraídos para: {country}")
+                print(f"Vizinhos: {neighbours}")
+            
+            print("-" * 50)
+
+        # Procura o link "NEXT"
+        next_link = bs.find('a', string=lambda text: text and 'Next' in text)
+        if next_link:
+            next_url = urljoin(url, next_link['href'])
+            print(f"Próxima página: {next_url}")
+            return next_url
+        else:
+            print("Não há mais páginas para processar.")
+            return None
+    return None
+
+# URL base - INICIO DO CODIGO
+base_url = 'http://127.0.0.1:8000/places/default/index'
 
 # Lista para armazenar os dados
 data = [['country', 'currency_name', 'continent', 'neighbours', 'timestamp']]
 
-# Obtém o conteúdo HTML da página base
-html = get_html_content(base_url)
-if html:
-    bs = BeautifulSoup(html, 'html.parser')
-
-    # Para cada link, verifica se contém "view" e processa
-    for link in bs.find_all('a', href=view_pattern):
-        href = link['href']
-        full_url = urljoin(base_url, href)
-        
-        print(f"\nProcessando país: {link.text.strip()}")
-        
-        # Obtém o conteúdo HTML da página do país
-        country_html = get_html_content(full_url)
-        if country_html:
-            country_bs = BeautifulSoup(country_html, 'html.parser')
-            
-            # Extrai as informações
-            country = extract_info(country_bs, 'places_country__row')
-            currency_name = extract_info(country_bs, 'places_currency_name__row')
-            continent = extract_info(country_bs, 'places_continent__row')
-            neighbours = get_neighbour_names(country_bs, base_url)
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Adiciona os dados à lista
-            data.append([country, currency_name, continent, neighbours, timestamp])
-            
-            print(f"Dados extraídos para: {country}")
-            print(f"Vizinhos: {neighbours}")
-        
-        print("-" * 50)
+# Processa todas as páginas
+current_url = base_url
+while current_url:
+    print(f"Processando página: {current_url}")
+    current_url = process_page(current_url, base_url, data)
 
 # Salva os dados em um arquivo CSV
 csv_filename = 'countries_data.csv'
